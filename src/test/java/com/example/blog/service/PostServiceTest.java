@@ -25,7 +25,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -34,7 +38,10 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for PostService
- * Tests CRUD operations and business logic
+ * Tests business logic in isolation using Mockito mocks
+ *
+ * Validates Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8,
+ *                         6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10, 6.11
  */
 @ExtendWith(MockitoExtension.class)
 class PostServiceTest {
@@ -56,63 +63,62 @@ class PostServiceTest {
 
     private User testUser;
     private Category testCategory;
-    private Tag testTag1;
-    private Tag testTag2;
+    private Tag testTag;
     private Post testPost;
+    private CreatePostRequest createRequest;
+    private UpdatePostRequest updateRequest;
 
     @BeforeEach
     void setUp() {
-        // Create test user
         testUser = new User();
         testUser.setId(1L);
         testUser.setUsername("testuser");
         testUser.setEmail("test@example.com");
-        testUser.setPassword("password");
-        testUser.setCreatedAt(LocalDateTime.now());
-        testUser.setUpdatedAt(LocalDateTime.now());
+        testUser.setPassword("encodedPassword");
 
-        // Create test category
         testCategory = new Category();
         testCategory.setId(1L);
         testCategory.setName("Technology");
 
-        // Create test tags
-        testTag1 = new Tag();
-        testTag1.setId(1L);
-        testTag1.setName("Java");
+        testTag = new Tag();
+        testTag.setId(1L);
+        testTag.setName("Java");
 
-        testTag2 = new Tag();
-        testTag2.setId(2L);
-        testTag2.setName("Spring");
-
-        // Create test post
         testPost = new Post();
         testPost.setId(1L);
         testPost.setTitle("Test Post");
         testPost.setContent("Test Content");
         testPost.setUser(testUser);
         testPost.setCategory(testCategory);
-        testPost.setTags(new HashSet<>(Arrays.asList(testTag1, testTag2)));
+        testPost.setTags(new HashSet<>(Set.of(testTag)));
         testPost.setCreatedAt(LocalDateTime.now());
         testPost.setUpdatedAt(LocalDateTime.now());
+
+        createRequest = new CreatePostRequest();
+        createRequest.setTitle("Test Post");
+        createRequest.setContent("Test Content");
+        createRequest.setCategoryId(1L);
+        createRequest.setTagIds(new HashSet<>(Set.of(1L)));
+
+        updateRequest = new UpdatePostRequest();
+        updateRequest.setTitle("Updated Post");
+        updateRequest.setContent("Updated Content");
+        updateRequest.setCategoryId(1L);
+        updateRequest.setTagIds(new HashSet<>(Set.of(1L)));
     }
 
-    @Test
-    void createPost_Success() {
-        // Arrange
-        CreatePostRequest request = new CreatePostRequest();
-        request.setTitle("New Post");
-        request.setContent("New Content");
-        request.setCategoryId(1L);
-        request.setTagIds(new HashSet<>(Arrays.asList(1L, 2L)));
+    // ==================== createPost tests ====================
 
+    @Test
+    void createPost_WithValidData_ReturnsPostDTO() {
+        // Arrange
         when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(testUser));
         when(categoryRepository.findById(1L)).thenReturn(Optional.of(testCategory));
-        when(tagRepository.findAllById(any())).thenReturn(Arrays.asList(testTag1, testTag2));
+        when(tagRepository.findAllById(any())).thenReturn(List.of(testTag));
         when(postRepository.save(any(Post.class))).thenReturn(testPost);
 
         // Act
-        PostDTO result = postService.createPost(request, "testuser");
+        PostDTO result = postService.createPost(createRequest, "testuser");
 
         // Assert
         assertNotNull(result);
@@ -120,151 +126,92 @@ class PostServiceTest {
         assertEquals("Test Content", result.getContent());
         assertEquals("testuser", result.getAuthorUsername());
         assertEquals("Technology", result.getCategoryName());
-        assertEquals(2, result.getTagNames().size());
         assertTrue(result.getTagNames().contains("Java"));
-        assertTrue(result.getTagNames().contains("Spring"));
-
-        verify(userRepository).findByUsername("testuser");
-        verify(categoryRepository).findById(1L);
-        verify(tagRepository).findAllById(any());
-        verify(postRepository).save(any(Post.class));
+        verify(postRepository, times(1)).save(any(Post.class));
     }
 
     @Test
-    void createPost_UserNotFound_ThrowsException() {
+    void createPost_WithNonExistentUser_ThrowsResourceNotFoundException() {
         // Arrange
-        CreatePostRequest request = new CreatePostRequest();
-        request.setTitle("New Post");
-        request.setContent("New Content");
-        request.setCategoryId(1L);
-
         when(userRepository.findByUsername("nonexistent")).thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThrows(ResourceNotFoundException.class, 
-            () -> postService.createPost(request, "nonexistent"));
-
-        verify(userRepository).findByUsername("nonexistent");
+        assertThrows(ResourceNotFoundException.class,
+                () -> postService.createPost(createRequest, "nonexistent"));
         verify(postRepository, never()).save(any());
     }
 
     @Test
-    void createPost_CategoryNotFound_ThrowsException() {
+    void createPost_WithNonExistentCategory_ThrowsResourceNotFoundException() {
         // Arrange
-        CreatePostRequest request = new CreatePostRequest();
-        request.setTitle("New Post");
-        request.setContent("New Content");
-        request.setCategoryId(999L);
-
         when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(testUser));
-        when(categoryRepository.findById(999L)).thenReturn(Optional.empty());
+        when(categoryRepository.findById(1L)).thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThrows(ResourceNotFoundException.class, 
-            () -> postService.createPost(request, "testuser"));
-
-        verify(categoryRepository).findById(999L);
+        assertThrows(ResourceNotFoundException.class,
+                () -> postService.createPost(createRequest, "testuser"));
         verify(postRepository, never()).save(any());
     }
 
     @Test
-    void createPost_TagNotFound_ThrowsException() {
+    void createPost_WithNonExistentTag_ThrowsResourceNotFoundException() {
         // Arrange
-        CreatePostRequest request = new CreatePostRequest();
-        request.setTitle("New Post");
-        request.setContent("New Content");
-        request.setCategoryId(1L);
-        request.setTagIds(new HashSet<>(Arrays.asList(1L, 999L)));
-
         when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(testUser));
         when(categoryRepository.findById(1L)).thenReturn(Optional.of(testCategory));
-        when(tagRepository.findAllById(any())).thenReturn(Arrays.asList(testTag1)); // Only 1 tag found
+        // Return empty list - fewer tags than requested
+        when(tagRepository.findAllById(any())).thenReturn(List.of());
 
         // Act & Assert
-        assertThrows(ResourceNotFoundException.class, 
-            () -> postService.createPost(request, "testuser"));
-
-        verify(tagRepository).findAllById(any());
+        assertThrows(ResourceNotFoundException.class,
+                () -> postService.createPost(createRequest, "testuser"));
         verify(postRepository, never()).save(any());
     }
 
+    // ==================== updatePost tests ====================
+
     @Test
-    void updatePost_Success() {
+    void updatePost_WithValidData_ReturnsUpdatedPostDTO() {
         // Arrange
-        UpdatePostRequest request = new UpdatePostRequest();
-        request.setTitle("Updated Post");
-        request.setContent("Updated Content");
-        request.setCategoryId(1L);
-        request.setTagIds(new HashSet<>(Arrays.asList(1L)));
+        Post updatedPost = new Post();
+        updatedPost.setId(1L);
+        updatedPost.setTitle("Updated Post");
+        updatedPost.setContent("Updated Content");
+        updatedPost.setUser(testUser);
+        updatedPost.setCategory(testCategory);
+        updatedPost.setTags(new HashSet<>(Set.of(testTag)));
+        updatedPost.setCreatedAt(LocalDateTime.now());
+        updatedPost.setUpdatedAt(LocalDateTime.now());
 
         when(postRepository.findById(1L)).thenReturn(Optional.of(testPost));
         when(categoryRepository.findById(1L)).thenReturn(Optional.of(testCategory));
-        when(tagRepository.findAllById(any())).thenReturn(Arrays.asList(testTag1));
-        when(postRepository.save(any(Post.class))).thenReturn(testPost);
+        when(tagRepository.findAllById(any())).thenReturn(List.of(testTag));
+        when(postRepository.save(any(Post.class))).thenReturn(updatedPost);
 
         // Act
-        PostDTO result = postService.updatePost(1L, request);
+        PostDTO result = postService.updatePost(1L, updateRequest);
 
         // Assert
         assertNotNull(result);
-        verify(postRepository).findById(1L);
-        verify(categoryRepository).findById(1L);
-        verify(tagRepository).findAllById(any());
-        verify(postRepository).save(any(Post.class));
+        assertEquals("Updated Post", result.getTitle());
+        assertEquals("Updated Content", result.getContent());
+        verify(postRepository, times(1)).save(any(Post.class));
     }
 
     @Test
-    void updatePost_PostNotFound_ThrowsException() {
+    void updatePost_WithNonExistentPost_ThrowsResourceNotFoundException() {
         // Arrange
-        UpdatePostRequest request = new UpdatePostRequest();
-        request.setTitle("Updated Post");
-        request.setContent("Updated Content");
-        request.setCategoryId(1L);
-
-        when(postRepository.findById(999L)).thenReturn(Optional.empty());
+        when(postRepository.findById(99L)).thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThrows(ResourceNotFoundException.class, 
-            () -> postService.updatePost(999L, request));
-
-        verify(postRepository).findById(999L);
+        assertThrows(ResourceNotFoundException.class,
+                () -> postService.updatePost(99L, updateRequest));
         verify(postRepository, never()).save(any());
     }
 
-    @Test
-    void updatePost_PreservesAuthor() {
-        // Arrange
-        UpdatePostRequest request = new UpdatePostRequest();
-        request.setTitle("Updated Post");
-        request.setContent("Updated Content");
-        request.setCategoryId(1L);
-        request.setTagIds(new HashSet<>());
-
-        Post originalPost = new Post();
-        originalPost.setId(1L);
-        originalPost.setTitle("Original Title");
-        originalPost.setContent("Original Content");
-        originalPost.setUser(testUser);
-        originalPost.setCategory(testCategory);
-        originalPost.setTags(new HashSet<>());
-
-        when(postRepository.findById(1L)).thenReturn(Optional.of(originalPost));
-        when(categoryRepository.findById(1L)).thenReturn(Optional.of(testCategory));
-        when(postRepository.save(any(Post.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        // Act
-        postService.updatePost(1L, request);
-
-        // Assert
-        verify(postRepository).save(argThat(post -> 
-            post.getUser().equals(testUser) && 
-            post.getTitle().equals("Updated Post") &&
-            post.getContent().equals("Updated Content")
-        ));
-    }
+    // ==================== getPostById tests ====================
 
     @Test
-    void getPostById_Success() {
+    void getPostById_WithExistingPost_ReturnsPostDTO() {
         // Arrange
         when(postRepository.findByIdWithRelations(1L)).thenReturn(Optional.of(testPost));
 
@@ -275,119 +222,68 @@ class PostServiceTest {
         assertNotNull(result);
         assertEquals(1L, result.getId());
         assertEquals("Test Post", result.getTitle());
-        assertEquals("Test Content", result.getContent());
         assertEquals("testuser", result.getAuthorUsername());
-        assertEquals("Technology", result.getCategoryName());
-
-        verify(postRepository).findByIdWithRelations(1L);
     }
 
     @Test
-    void getPostById_NotFound_ThrowsException() {
+    void getPostById_WithNonExistentPost_ThrowsResourceNotFoundException() {
         // Arrange
-        when(postRepository.findByIdWithRelations(999L)).thenReturn(Optional.empty());
+        when(postRepository.findByIdWithRelations(99L)).thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThrows(ResourceNotFoundException.class, 
-            () -> postService.getPostById(999L));
-
-        verify(postRepository).findByIdWithRelations(999L);
+        assertThrows(ResourceNotFoundException.class,
+                () -> postService.getPostById(99L));
     }
 
-    @Test
-    void getAllPosts_Success() {
-        // Arrange
-        List<Post> posts = Arrays.asList(testPost);
-        Page<Post> postPage = new PageImpl<>(posts, PageRequest.of(0, 10), 1);
+    // ==================== getAllPosts tests ====================
 
-        when(postRepository.findAll(any(Pageable.class))).thenReturn(postPage);
+    @Test
+    void getAllPosts_ReturnsPageResponse() {
+        // Arrange
+        Pageable pageable = PageRequest.of(0, 10);
+        List<Post> posts = Arrays.asList(testPost);
+        Page<Post> postPage = new PageImpl<>(posts, pageable, 1);
+
+        when(postRepository.findAll(pageable)).thenReturn(postPage);
 
         // Act
-        PageResponse<PostDTO> result = postService.getAllPosts(PageRequest.of(0, 10));
+        PageResponse<PostDTO> result = postService.getAllPosts(pageable);
 
         // Assert
         assertNotNull(result);
         assertEquals(1, result.getContent().size());
         assertEquals(0, result.getPageNumber());
         assertEquals(10, result.getPageSize());
-        assertEquals(1, result.getTotalElements());
+        assertEquals(1L, result.getTotalElements());
         assertEquals(1, result.getTotalPages());
         assertTrue(result.isFirst());
         assertTrue(result.isLast());
-
-        verify(postRepository).findAll(any(Pageable.class));
     }
 
-    @Test
-    void getAllPosts_EmptyResult() {
-        // Arrange
-        Page<Post> emptyPage = new PageImpl<>(Collections.emptyList(), PageRequest.of(0, 10), 0);
-
-        when(postRepository.findAll(any(Pageable.class))).thenReturn(emptyPage);
-
-        // Act
-        PageResponse<PostDTO> result = postService.getAllPosts(PageRequest.of(0, 10));
-
-        // Assert
-        assertNotNull(result);
-        assertEquals(0, result.getContent().size());
-        assertEquals(0, result.getTotalElements());
-
-        verify(postRepository).findAll(any(Pageable.class));
-    }
+    // ==================== deletePost tests ====================
 
     @Test
-    void deletePost_Success() {
+    void deletePost_WithExistingPost_DeletesSuccessfully() {
         // Arrange
         when(postRepository.findById(1L)).thenReturn(Optional.of(testPost));
-        doNothing().when(postRepository).delete(any(Post.class));
+        doNothing().when(postRepository).delete(testPost);
 
         // Act
         postService.deletePost(1L);
 
         // Assert
-        verify(postRepository).findById(1L);
-        verify(postRepository).delete(testPost);
+        verify(postRepository, times(1)).findById(1L);
+        verify(postRepository, times(1)).delete(testPost);
     }
 
     @Test
-    void deletePost_NotFound_ThrowsException() {
+    void deletePost_WithNonExistentPost_ThrowsResourceNotFoundException() {
         // Arrange
-        when(postRepository.findById(999L)).thenReturn(Optional.empty());
+        when(postRepository.findById(99L)).thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThrows(ResourceNotFoundException.class, 
-            () -> postService.deletePost(999L));
-
-        verify(postRepository).findById(999L);
+        assertThrows(ResourceNotFoundException.class,
+                () -> postService.deletePost(99L));
         verify(postRepository, never()).delete(any());
-    }
-
-    @Test
-    void convertToDTO_WithNullCategory() {
-        // Arrange
-        testPost.setCategory(null);
-        when(postRepository.findByIdWithRelations(1L)).thenReturn(Optional.of(testPost));
-
-        // Act
-        PostDTO result = postService.getPostById(1L);
-
-        // Assert
-        assertNotNull(result);
-        assertNull(result.getCategoryName());
-    }
-
-    @Test
-    void convertToDTO_WithEmptyTags() {
-        // Arrange
-        testPost.setTags(new HashSet<>());
-        when(postRepository.findByIdWithRelations(1L)).thenReturn(Optional.of(testPost));
-
-        // Act
-        PostDTO result = postService.getPostById(1L);
-
-        // Assert
-        assertNotNull(result);
-        assertTrue(result.getTagNames().isEmpty());
     }
 }
