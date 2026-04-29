@@ -4,6 +4,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -16,6 +17,12 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * Security configuration for JWT-based authentication.
  * 
  * Validates Requirements:
+ * - 5.1: POST /api/posts endpoint protected with @PreAuthorize("isAuthenticated()")
+ * - 5.2: PUT /api/posts/{id} endpoint protected with @PreAuthorize("isAuthenticated()")
+ * - 5.3: DELETE /api/posts/{id} endpoint protected with @PreAuthorize("isAuthenticated()")
+ * - 5.4: POST /api/posts/{postId}/comments endpoint protected with @PreAuthorize("isAuthenticated()")
+ * - 5.5: PUT /api/posts/{postId}/comments/{commentId} endpoint protected with @PreAuthorize("isAuthenticated()")
+ * - 5.6: DELETE /api/posts/{postId}/comments/{commentId} endpoint protected with @PreAuthorize("isAuthenticated()")
  * - 7.1: Permit all requests to /api/auth/** without authentication
  * - 7.2: Require authentication for all other API endpoints
  * - 7.3: Disable CSRF protection for stateless JWT authentication
@@ -26,6 +33,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  */
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
