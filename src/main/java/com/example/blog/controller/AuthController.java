@@ -4,9 +4,16 @@ import com.example.blog.dto.AuthResponse;
 import com.example.blog.dto.ErrorResponse;
 import com.example.blog.dto.LoginRequest;
 import com.example.blog.dto.RegisterRequest;
+import com.example.blog.dto.ValidationErrorResponse;
 import com.example.blog.entity.User;
 import com.example.blog.repository.UserRepository;
 import com.example.blog.security.JwtTokenProvider;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -62,8 +69,36 @@ public class AuthController {
      * 
      * Validates: Requirements 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 12.2, 12.3
      */
+    @Operation(
+        summary = "Register a new user",
+        description = "Creates a new user account with username, email, and password. No authentication required. " +
+                      "Returns the created user's username and email (no token is generated at registration)."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "201",
+            description = "User registered successfully",
+            content = @Content(
+                mediaType = "application/json",
+                schema = @Schema(implementation = AuthResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request data, validation error, or username/email already exists",
+            content = @Content(
+                mediaType = "application/json",
+                schema = @Schema(implementation = ValidationErrorResponse.class)
+            )
+        )
+    })
     @PostMapping("/register")
-    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest request) {
+    public ResponseEntity<?> register(
+            @Parameter(
+                description = "Registration request containing username, email, and password",
+                required = true
+            )
+            @Valid @RequestBody RegisterRequest request) {
         // Check if username already exists
         if (userRepository.existsByUsername(request.getUsername())) {
             ErrorResponse errorResponse = new ErrorResponse(
@@ -109,8 +144,36 @@ public class AuthController {
      * 
      * Validates: Requirements 9.1, 9.4, 9.5, 9.6, 9.7, 9.8, 12.1
      */
+    @Operation(
+        summary = "Login and get JWT token",
+        description = "Authenticates a user with username/email and password. Returns a JWT token that can be used " +
+                      "to access protected endpoints. No authentication required."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "Login successful - returns JWT token, username, and email",
+            content = @Content(
+                mediaType = "application/json",
+                schema = @Schema(implementation = AuthResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "401",
+            description = "Invalid username/email or password",
+            content = @Content(
+                mediaType = "application/json",
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        )
+    })
     @PostMapping("/login")
-    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
+    public ResponseEntity<?> login(
+            @Parameter(
+                description = "Login request containing username or email and password",
+                required = true
+            )
+            @Valid @RequestBody LoginRequest request) {
         try {
             // Create authentication token with credentials
             UsernamePasswordAuthenticationToken authenticationToken = 

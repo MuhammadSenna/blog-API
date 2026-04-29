@@ -66,10 +66,23 @@ public class SecurityConfig {
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
             
+            // Configure exception handling to return 401 for unauthenticated requests
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint((request, response, authException) -> {
+                    response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"message\":\"Unauthorized\",\"status\":401}");
+                })
+            )
+            
             // Configure authorization rules
             .authorizeHttpRequests(auth -> auth
                 // Permit all requests to /api/auth/** (registration and login)
                 .requestMatchers("/api/auth/**").permitAll()
+                // Permit GET requests to posts and comments (public read access)
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/posts/**").permitAll()
+                // Swagger UI and OpenAPI spec
+                .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                 // Require authentication for all other requests
                 .anyRequest().authenticated()
             )
